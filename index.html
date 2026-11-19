@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 selection:bg-indigo-500 selection:text-white">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Scorekeeper</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    /* Prevent unwanted zooming & selection on mobile rapid taps */
+    * {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Custom scrollbar styling for history list & player grid */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+
+    /* Tactile button active effect */
+    .key-btn {
+      transition: transform 0.05s ease, background-color 0.1s ease, border-color 0.1s ease;
+    }
+    .key-btn:active {
+      transform: scale(0.94);
+    }
+    
+    /* Subtle pulse animation for active turn indicator */
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+      70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    .active-player-glow {
+      animation: pulse-ring 2s infinite;
+    }
+  </style>
+</head>
+
+<body class="h-full h-[100dvh] flex flex-col justify-between overflow-hidden bg-slate-950 text-slate-100">
+  
+  <!-- APP CONTAINER (Mobile centered on Desktop, using dynamic dvh for mobile viewports) -->
+  <div class="mx-auto w-full max-w-md h-full h-[100dvh] flex flex-col bg-slate-900 border-x border-slate-800 shadow-2xl relative overflow-hidden">
+    
+    <!-- HEADER BAR -->
+    <header class="flex-none px-4 py-3 bg-slate-900/90 backdrop-blur border-b border-slate-800 flex items-center justify-between z-10">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold font-mono">
+          #
+        </div>
+        <div>
+          <h1 class="text-sm font-bold tracking-tight text-slate-100 flex items-center gap-1.5">
+            Scorekeeper
+          </h1>
+          <p class="text-[10px] text-slate-400 font-mono tracking-wider">
+            ROUND <span id="roundCounterDisplay" class="text-emerald-400 font-bold">1</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <!-- Sound Toggle -->
+        <button id="soundToggleBtn" onclick="toggleAudio()" title="Toggle Sound Effects" 
+                class="p-2 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition">
+          <svg id="soundIconOn" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+          <svg id="soundIconOff" class="w-5 h-5 hidden text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+        </button>
+
+        <!-- New Game / Reset Button -->
+        <button onclick="confirmResetGame()" title="New Game"
+                class="px-2.5 py-1.5 text-xs font-semibold text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg transition flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Reset
+        </button>
+      </div>
+    </header>
+
+    <!-- TOP: PLAYERS GRID (2-Column Vertical Wrap Layout) -->
+    <section class="flex-none p-3 border-b border-slate-800 bg-slate-900/50">
+      <div id="playersContainer" class="grid grid-cols-2 gap-2 max-h-[30vh] overflow-y-auto custom-scrollbar pr-0.5">
+        <!-- Player Cards Dynamically Rendered Here -->
+      </div>
+    </section>
+
+    <!-- MIDDLE: TURN-BY-TURN HISTORY LOG -->
+    <main class="flex-1 min-h-0 flex flex-col bg-slate-950/80 relative">
+      <!-- Log Header -->
+      <div class="px-4 py-2 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Score History Log
+        </span>
+        <button id="undoBtn" onclick="undoLastTurn()" disabled
+                class="text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 font-medium transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+          Undo Last
+        </button>
+      </div>
+
+      <!-- Scrollable History List -->
+      <div id="historyList" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+        <!-- History Items Inserted Here -->
+      </div>
+    </main>
+
+    <!-- BOTTOM: CALCULATOR KEYPAD & INPUT DISPLAY -->
+    <footer class="flex-none bg-slate-900 border-t border-slate-800 p-3 shadow-lg">
+      
+      <!-- Live Input Preview Display Bar -->
+      <div class="mb-3 px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between">
+        <div class="flex items-center gap-2 overflow-hidden">
+          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 flex-none" id="activePlayerTag">
+            P1
+          </span>
+          <span class="text-xs text-slate-400 font-medium truncate">
+            Scoring for <strong id="activePlayerNameDisplay" class="text-slate-100 font-semibold">Player 1</strong>
+          </span>
+        </div>
+        
+        <!-- Currently Typed Value -->
+        <div class="flex items-baseline gap-1 font-mono">
+          <span id="inputDisplay" class="text-2xl font-extrabold tracking-tight text-emerald-400">0</span>
+        </div>
+      </div>
+
+      <!-- Keypad Grid (4 Rows x 4 Columns) -->
+      <div class="grid grid-cols-4 gap-2">
+        <!-- Row 1 -->
+        <button onclick="handleKeypad('7')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">7</button>
+        <button onclick="handleKeypad('8')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">8</button>
+        <button onclick="handleKeypad('9')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">9</button>
+        <button onclick="handleKeypad('CLEAR')" class="key-btn h-12 bg-slate-800/80 hover:bg-rose-950/40 hover:text-rose-400 text-slate-300 font-semibold text-xs rounded-xl border border-slate-700/60 flex flex-col items-center justify-center gap-0.5">
+          <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-9.172a2 2 0 00-1.414.586L3 12z"/></svg>
+          CLEAR
+        </button>
+
+        <!-- Row 2 -->
+        <button onclick="handleKeypad('4')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">4</button>
+        <button onclick="handleKeypad('5')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">5</button>
+        <button onclick="handleKeypad('6')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">6</button>
+        <button onclick="handleKeypad('TOGGLE_SIGN')" class="key-btn h-12 bg-slate-800/80 hover:bg-slate-700 text-amber-400 font-mono font-bold text-lg rounded-xl border border-slate-700/60 flex items-center justify-center" title="Toggle Positive / Negative">
+          + / −
+        </button>
+
+        <!-- Row 3 -->
+        <button onclick="handleKeypad('1')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">1</button>
+        <button onclick="handleKeypad('2')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">2</button>
+        <button onclick="handleKeypad('3')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">3</button>
+        <button onclick="submitSkipTurn()" class="key-btn h-12 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-semibold text-xs rounded-xl border border-amber-500/30 flex flex-col items-center justify-center gap-0.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+          SKIP
+        </button>
+
+        <!-- Row 4 -->
+        <button onclick="handleKeypad('0')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-xl rounded-xl border border-slate-700/60 shadow-sm">0</button>
+        <button onclick="handleKeypad('00')" class="key-btn h-12 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold font-mono text-lg rounded-xl border border-slate-700/60 shadow-sm">00</button>
+        
+        <!-- ENTER / ADD SCORE BUTTON (Spans 2 columns) -->
+        <button onclick="submitScore()" class="key-btn col-span-2 h-12 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm tracking-wide rounded-xl border border-emerald-400/40 shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2">
+          <span>ADD SCORE</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </button>
+      </div>
+
+    </footer>
+
+  </div>
+
+  <!-- PLAYER RENAME / EDIT MODAL -->
+  <div id="renameModal" onclick="if(event.target === this) closeRenameModal()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-5 shadow-2xl space-y-4">
+      <h3 class="text-base font-bold text-slate-100">Edit Player Name</h3>
+      <input type="text" id="renameInput" maxlength="14"
+             class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-emerald-500 font-medium" />
+      <div class="flex justify-between items-center pt-2">
+        <button id="deletePlayerBtn" onclick="deleteCurrentPlayer()" class="px-3 py-2 text-xs font-semibold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl transition">
+          Remove Player
+        </button>
+        <div class="flex gap-2">
+          <button onclick="closeRenameModal()" class="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200">
+            Cancel
+          </button>
+          <button onclick="savePlayerName()" class="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESET CONFIRMATION MODAL -->
+  <div id="resetModal" onclick="if(event.target === this) closeResetModal()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-5 shadow-2xl space-y-4 text-center">
+      <div class="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto text-xl">
+        ⚠️
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-100">Start New Game?</h3>
+        <p class="text-xs text-slate-400 mt-1">Choose whether to keep custom player names or reset everything.</p>
+      </div>
+      <div class="space-y-2 pt-1">
+        <button onclick="executeResetGame(false)" class="w-full py-2.5 text-xs font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl transition">
+          Reset Scores Only (Keep Names)
+        </button>
+        <button onclick="executeResetGame(true)" class="w-full py-2 text-xs font-semibold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition">
+          Reset Everything (Default Players)
+        </button>
+        <button onclick="closeResetModal()" class="w-full py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP JAVASCRIPT LOGIC -->
+  <script>
+    // --- APP STATE ---
+    const STORAGE_KEY = 'boardgame_scorekeeper_state_v1';
+
+    const COLOR_PALETTES = [
+      { name: 'emerald', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', activeBorder: 'border-emerald-400', text: 'text-emerald-400', activeRing: 'ring-emerald-500/50' },
+      { name: 'indigo',  bg: 'bg-indigo-500/10',  border: 'border-indigo-500/30',  activeBorder: 'border-indigo-400',  text: 'text-indigo-400',  activeRing: 'ring-indigo-500/50' },
+      { name: 'amber',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   activeBorder: 'border-amber-400',   text: 'text-amber-400',   activeRing: 'ring-amber-500/50' },
+      { name: 'sky',     bg: 'bg-sky-500/10',     border: 'border-sky-500/30',     activeBorder: 'border-sky-400',     text: 'text-sky-400',     activeRing: 'ring-sky-500/50' },
+      { name: 'rose',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    activeBorder: 'border-rose-400',    text: 'text-rose-400',    activeRing: 'ring-rose-500/50' },
+      { name: 'purple',  bg: 'bg-purple-500/10',  border: 'border-purple-500/30',  activeBorder: 'border-purple-400',  text: 'text-purple-400',  activeRing: 'ring-purple-500/50' },
+    ];
+
+    const defaultState = {
+      players: [
+        { id: 'p1', name: 'Player 1', score: 0, colorIdx: 0 },
+        { id: 'p2', name: 'Player 2', score: 0, colorIdx: 1 }
+      ],
+      activePlayerIndex: 0,
+      round: 1,
+      history: [],
+      soundEnabled: true
+    };
+
+    let state = JSON.parse(JSON.stringify(defaultState));
+    let currentInputDigits = '';
+    let isNegative = false;
+    let editingPlayerId = null;
+
+    // --- AUDIO SYNTHESIZER (Web Audio API) ---
+    let audioCtx = null;
+    
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playBeep(freq = 440, type = 'sine', duration = 0.05) {
+      if (!state.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (e) {
+        // Ignore audio errors on restricted user gestures
+      }
+    }
+
+    function toggleAudio() {
+      state.soundEnabled = !state.soundEnabled;
+      updateAudioIcon();
+      saveState();
+    }
+
+    function updateAudioIcon() {
+      document.getElementById('soundIconOn').classList.toggle('hidden', !state.soundEnabled);
+      document.getElementById('soundIconOff').classList.toggle('hidden', state.soundEnabled);
+    }
+
+    // --- LOCAL STORAGE PERSISTENCE & SCHEMATIC VALIDATION ---
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        console.warn('Failed to save to localStorage', e);
+      }
+    }
+
+    function loadState() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && Array.isArray(parsed.players) && parsed.players.length >= 2) {
+            state = parsed;
+            // Validate bounds and fallback missing properties
+            if (typeof state.activePlayerIndex !== 'number' || state.activePlayerIndex < 0 || state.activePlayerIndex >= state.players.length) {
+              state.activePlayerIndex = 0;
+            }
+            if (typeof state.round !== 'number' || state.round < 1) {
+              state.round = 1;
+            }
+            if (!Array.isArray(state.history)) {
+              state.history = [];
+            }
+            if (typeof state.soundEnabled !== 'boolean') {
+              state.soundEnabled = true;
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse saved state from localStorage; falling back to default', e);
+      }
+      state = JSON.parse(JSON.stringify(defaultState));
+    }
+
+    // --- INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      updateAudioIcon();
+      renderApp();
+
+      // Keyboard support inside rename input
+      const renameInput = document.getElementById('renameInput');
+      if (renameInput) {
+        renameInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            savePlayerName();
+          }
+        });
+      }
+
+      // Desktop keyboard shortcuts & Modal Escape listener
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeRenameModal();
+          closeResetModal();
+          return;
+        }
+
+        if (document.getElementById('renameModal').classList.contains('hidden') === false) return;
+        if (document.getElementById('resetModal').classList.contains('hidden') === false) return;
+
+        if (e.key >= '0' && e.key <= '9') {
+          handleKeypad(e.key);
+        } else if (e.key === 'Backspace') {
+          handleKeypad('CLEAR');
+        } else if (e.key === '-' || e.key === '+') {
+          handleKeypad('TOGGLE_SIGN');
+        } else if (e.key === 'Enter') {
+          submitScore();
+        } else if (e.key.toLowerCase() === 's') {
+          submitSkipTurn();
+        } else if (e.key.toLowerCase() === 'u') {
+          undoLastTurn();
+        }
+      });
+    });
+
+    // --- RENDER FUNCTIONS ---
+    function renderApp() {
+      renderPlayers();
+      renderInputDisplay();
+      renderHistory();
+      renderHeaderInfo();
+    }
+
+    function renderHeaderInfo() {
+      document.getElementById('roundCounterDisplay').textContent = state.round;
+      
+      const activePlayer = state.players[state.activePlayerIndex] || state.players[0];
+      if (activePlayer) {
+        document.getElementById('activePlayerTag').textContent = `P${state.activePlayerIndex + 1}`;
+        document.getElementById('activePlayerNameDisplay').textContent = activePlayer.name;
+      }
+
+      document.getElementById('undoBtn').disabled = state.history.length === 0;
+    }
+
+    function renderPlayers() {
+      const container = document.getElementById('playersContainer');
+      container.innerHTML = '';
+
+      state.players.forEach((player, index) => {
+        const isActive = index === state.activePlayerIndex;
+        const color = COLOR_PALETTES[player.colorIdx % COLOR_PALETTES.length];
+
+        const card = document.createElement('div');
+        card.className = `p-2.5 rounded-xl border transition-all cursor-pointer relative flex flex-col justify-between ${
+          isActive 
+            ? `bg-slate-900 ${color.activeBorder} ring-2 ${color.activeRing} shadow-md shadow-black/40` 
+            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 opacity-80'
+        }`;
+        
+        card.onclick = () => selectActivePlayer(index);
+
+        card.innerHTML = `
+          <!-- Top Row: P# badge + Active Dot + Edit Icon -->
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded font-mono ${color.bg} ${color.text} border ${color.border}">
+              P${index + 1}
+            </span>
+            <div class="flex items-center gap-1.5">
+              ${isActive ? `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>` : ''}
+              <button onclick="event.stopPropagation(); openRenameModal('${player.id}')" 
+                      class="text-slate-400 hover:text-emerald-400 p-0.5 rounded hover:bg-slate-800 transition" title="Edit player name">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Player Name & Score Row -->
+          <div class="flex items-baseline justify-between gap-2">
+            <div onclick="event.stopPropagation(); openRenameModal('${player.id}')" 
+                 class="font-bold text-xs text-slate-200 truncate hover:text-emerald-400 transition cursor-pointer flex items-center gap-1 group" 
+                 title="Tap to edit ${escapeHtml(player.name)}">
+              <span class="truncate">${escapeHtml(player.name)}</span>
+            </div>
+            <div class="text-right">
+              <span class="text-xl font-black font-mono tracking-tight ${isActive ? color.text : 'text-slate-100'}">
+                ${player.score}
+              </span>
+            </div>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+
+      // Add Player Button Card (Only if < 10 players)
+      if (state.players.length < 10) {
+        const addCard = document.createElement('button');
+        addCard.onclick = addNewPlayer;
+        addCard.className = 'p-2.5 rounded-xl border border-dashed border-slate-800 hover:border-slate-700 bg-slate-900/20 hover:bg-slate-900/40 text-slate-400 flex items-center justify-center gap-2 transition text-xs font-semibold h-full min-h-[58px]';
+        addCard.innerHTML = `
+          <div class="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+          </div>
+          <span>Add Player</span>
+        `;
+        container.appendChild(addCard);
+      }
+    }
+
+    function renderInputDisplay() {
+      const displayEl = document.getElementById('inputDisplay');
+      if (currentInputDigits === '' || currentInputDigits === '0') {
+        displayEl.textContent = '0';
+        displayEl.className = 'text-2xl font-extrabold tracking-tight text-slate-500 font-mono';
+      } else {
+        const prefix = isNegative ? '−' : '+';
+        displayEl.textContent = `${prefix}${currentInputDigits}`;
+        displayEl.className = `text-2xl font-extrabold tracking-tight font-mono ${isNegative ? 'text-rose-400' : 'text-emerald-400'}`;
+      }
+    }
+
+    function renderHistory() {
+      const historyList = document.getElementById('historyList');
+      historyList.innerHTML = '';
+
+      if (state.history.length === 0) {
+        historyList.innerHTML = `
+          <div class="h-full flex flex-col items-center justify-center text-slate-600 space-y-2 py-8">
+            <svg class="w-10 h-10 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            <p class="text-xs font-medium">No scores recorded yet</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Render items in reverse order (newest first)
+      const reversedHistory = [...state.history].reverse();
+      reversedHistory.forEach((entry) => {
+        const item = document.createElement('div');
+        item.className = 'p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs font-mono';
+        
+        const deltaStr = entry.isSkip ? 'SKIP' : (entry.scoreDelta > 0 ? `+${entry.scoreDelta}` : `${entry.scoreDelta}`);
+        const deltaColor = entry.isSkip ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : (entry.scoreDelta >= 0 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20');
+        
+        item.innerHTML = `
+          <div class="flex items-center gap-2 overflow-hidden">
+            <span class="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded font-bold">R${entry.round}</span>
+            <span class="font-sans font-semibold text-slate-200 truncate max-w-[120px]">${escapeHtml(entry.playerName)}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded border ${deltaColor} font-bold">${deltaStr}</span>
+            <span class="text-slate-400 text-[11px]">→ <strong class="text-slate-200">${entry.newTotal}</strong></span>
+          </div>
+        `;
+        historyList.appendChild(item);
+      });
+    }
+
+    // --- KEYPAD LOGIC & EDGE CASE HARDENING ---
+    function handleKeypad(val) {
+      playBeep(520, 'sine', 0.03);
+
+      if (val === 'CLEAR') {
+        currentInputDigits = '';
+        isNegative = false;
+      } else if (val === 'TOGGLE_SIGN') {
+        isNegative = !isNegative;
+      } else if (val === '0' || val === '00') {
+        if (currentInputDigits !== '' && currentInputDigits !== '0') {
+          if (currentInputDigits.length + val.length <= 5) {
+            currentInputDigits += val;
+          }
+        }
+      } else {
+        // Digits 1-9 (capped at max 5 digits / max ±99,999)
+        if (currentInputDigits === '0') currentInputDigits = '';
+        if (currentInputDigits.length < 5) {
+          currentInputDigits += val;
+        }
+      }
+
+      renderInputDisplay();
+    }
+
+    function submitScore() {
+      if (currentInputDigits === '' || currentInputDigits === '0') {
+        playBeep(200, 'sawtooth', 0.1);
+        return;
+      }
+
+      playBeep(660, 'triangle', 0.06);
+
+      let numericValue = parseInt(currentInputDigits, 10) || 0;
+      if (isNegative && numericValue > 0) numericValue = -numericValue;
+
+      recordTurn(numericValue, false);
+
+      currentInputDigits = '';
+      isNegative = false;
+      renderInputDisplay();
+    }
+
+    function submitSkipTurn() {
+      playBeep(350, 'sine', 0.06);
+      recordTurn(0, true);
+      
+      currentInputDigits = '';
+      isNegative = false;
+      renderInputDisplay();
+    }
+
+    function recordTurn(delta, isSkip) {
+      const activePlayer = state.players[state.activePlayerIndex];
+      const oldTotal = activePlayer.score;
+      const newTotal = oldTotal + delta;
+
+      activePlayer.score = newTotal;
+
+      state.history.push({
+        id: Date.now().toString(),
+        round: state.round,
+        playerId: activePlayer.id,
+        playerName: activePlayer.name,
+        scoreDelta: delta,
+        isSkip: isSkip,
+        previousTotal: oldTotal,
+        newTotal: newTotal,
+        playerIndex: state.activePlayerIndex
+      });
+
+      advanceTurn();
+      saveState();
+      renderApp();
+    }
+
+    function advanceTurn() {
+      const nextIndex = (state.activePlayerIndex + 1) % state.players.length;
+      if (nextIndex === 0) {
+        state.round += 1;
+      }
+      state.activePlayerIndex = nextIndex;
+    }
+
+    function undoLastTurn() {
+      if (state.history.length === 0) return;
+
+      playBeep(300, 'square', 0.08);
+
+      const lastEntry = state.history.pop();
+      
+      const player = state.players.find(p => p.id === lastEntry.playerId);
+      if (player) {
+        player.score = lastEntry.previousTotal;
+      }
+
+      state.activePlayerIndex = lastEntry.playerIndex;
+      state.round = lastEntry.round;
+
+      saveState();
+      renderApp();
+    }
+
+    function selectActivePlayer(index) {
+      if (index >= 0 && index < state.players.length) {
+        playBeep(450, 'sine', 0.03);
+        state.activePlayerIndex = index;
+        saveState();
+        renderApp();
+      }
+    }
+
+    // --- PLAYER MANAGEMENT & SAFE DELETION ---
+    function addNewPlayer() {
+      if (state.players.length >= 10) return;
+
+      playBeep(580, 'sine', 0.05);
+
+      const newId = `p_${Date.now()}`;
+      const newNum = state.players.length + 1;
+      const colorIdx = state.players.length % COLOR_PALETTES.length;
+      const defaultName = `Player ${newNum}`;
+
+      state.players.push({
+        id: newId,
+        name: defaultName,
+        score: 0,
+        colorIdx: colorIdx
+      });
+
+      saveState();
+      renderApp();
+
+      openRenameModal(newId);
+    }
+
+    function openRenameModal(playerId) {
+      playBeep(400, 'sine', 0.03);
+      editingPlayerId = playerId;
+      const player = state.players.find(p => p.id === playerId);
+      if (!player) return;
+
+      const input = document.getElementById('renameInput');
+      input.value = player.name;
+      
+      document.getElementById('deletePlayerBtn').style.display = state.players.length > 2 ? 'block' : 'none';
+
+      document.getElementById('renameModal').classList.remove('hidden');
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 100);
+    }
+
+    function closeRenameModal() {
+      document.getElementById('renameModal').classList.add('hidden');
+      editingPlayerId = null;
+    }
+
+    function savePlayerName() {
+      const input = document.getElementById('renameInput');
+      let newName = input.value.trim();
+      
+      if (editingPlayerId) {
+        const player = state.players.find(p => p.id === editingPlayerId);
+        if (player) {
+          if (!newName) {
+            const pIndex = state.players.indexOf(player) + 1;
+            newName = `Player ${pIndex}`;
+          }
+          player.name = newName;
+          
+          state.history.forEach(h => {
+            if (h.playerId === editingPlayerId) h.playerName = newName;
+          });
+        }
+      }
+      closeRenameModal();
+      saveState();
+      renderApp();
+    }
+
+    function deleteCurrentPlayer() {
+      if (!editingPlayerId || state.players.length <= 2) return;
+
+      const deletedIdx = state.players.findIndex(p => p.id === editingPlayerId);
+      if (deletedIdx === -1) return;
+
+      state.players.splice(deletedIdx, 1);
+
+      // Adjust active player index cleanly
+      if (state.activePlayerIndex > deletedIdx) {
+        state.activePlayerIndex -= 1;
+      } else if (state.activePlayerIndex === deletedIdx) {
+        if (state.activePlayerIndex >= state.players.length) {
+          state.activePlayerIndex = 0;
+        }
+      }
+
+      if (state.activePlayerIndex < 0 || state.activePlayerIndex >= state.players.length) {
+        state.activePlayerIndex = 0;
+      }
+
+      closeRenameModal();
+      saveState();
+      renderApp();
+    }
+
+    // --- GAME RESET LOGIC ---
+    function confirmResetGame() {
+      playBeep(300, 'sawtooth', 0.08);
+      document.getElementById('resetModal').classList.remove('hidden');
+    }
+
+    function closeResetModal() {
+      document.getElementById('resetModal').classList.add('hidden');
+    }
+
+    function executeResetGame(resetPlayers = false) {
+      playBeep(600, 'sine', 0.1);
+
+      if (resetPlayers) {
+        state.players = [
+          { id: 'p1', name: 'Player 1', score: 0, colorIdx: 0 },
+          { id: 'p2', name: 'Player 2', score: 0, colorIdx: 1 }
+        ];
+      } else {
+        state.players.forEach(p => p.score = 0);
+      }
+
+      state.activePlayerIndex = 0;
+      state.round = 1;
+      state.history = [];
+
+      currentInputDigits = '';
+      isNegative = false;
+
+      closeResetModal();
+      saveState();
+      renderApp();
+    }
+
+    // --- UTILITIES ---
+    function escapeHtml(str) {
+      if (typeof str !== 'string') return str;
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
